@@ -3,10 +3,11 @@ authors = ["stuart_zhang <stuartpage@qq.com>"]
 categories = ["wasm"]
 description = "二次封装`gloo crate`，将`Cpp - RAII`风格的`DOM`事件处理函数挂载方式封装为`Javascript - Angular`风格的`register / deregister`模式。"
 edition = "2021"
-keywords = ["wasm", "dom", "event", "event_listener", "on", "off"]
+keywords = ["wasm", "dom", "event", "event_listener"]
+license = "MIT"
 name = "wasm-gloo-dom-events"
-publish = ["https://github.com/rust-lang/crates.io-index"]
-version = "0.1.0"
+repository = "https://github.com/stuartZhang/wasm-gloo-dom-events"
+version = "0.1.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
