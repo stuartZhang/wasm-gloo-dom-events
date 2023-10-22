@@ -1,8 +1,23 @@
 [package]
-name = "dom_events"
-version = "0.1.0"
+authors = ["stuart_zhang <stuartpage@qq.com>"]
+categories = ["wasm"]
+description = "在 WASM 中，将 Cpp - RAII 风格的 DOM 事件处理函数挂载方式封装为 js 风格的 watch/unwatch 挂载方式"
 edition = "2021"
+keywords = ["wasm", "dom", "event", "event_listener", "on", "off"]
+name = "wasm-dom-events"
+publish = ["https://github.com/rust-lang/crates.io-index"]
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+futures = "0.3.28"
+gloo = { version = "0.10.0", features = ["futures"] }
+serde = {version = "1.0.80", features = ["derive"]}
+serde-wasm-bindgen = "0.5"
+wasm-bindgen = {version = "0.2.87", features = ["serde-serialize"]}
+wasm-bindgen-futures = "0.4.37"
+web-sys = {version = "0.3.64", features = [
+    "CustomEvent",
+    "Event",
+]}
