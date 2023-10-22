@@ -82,6 +82,12 @@ impl EventStream {
             _listener: Listener::Render(listener),
         }
     }
+    /// 向`DOM`元素挂载指定事件类型的事件处理函数
+    /// * `options: Into<Option<Options>>`被用来构造`gloo::events::EventListenerOptions`实例。
+    /// # Examples
+    /// # Panics
+    /// # Errors
+    /// # Safety
     #[allow(unused)]
     #[must_use]
     pub fn on<CB, Fut, O>(target: &EventTarget, event_type: impl Into<Cow<'static, str>>, options: O, callback: CB) -> impl FnOnce()
@@ -108,6 +114,13 @@ impl EventStream {
             executor::block_on(sender.close()).unwrap_throw()
         }
     }
+    /// 向浏览器【历史栈】挂载活跃项变更事件处理函数
+    /// * `event_type: &str`会被映射给事件处理函数 event 实参的 type 属性值
+    /// * `is_serial: bool`表示：当事件被频繁且连续地被触发时，事件处理函数是否被允许并发地执行，或者必须串行执行。
+    /// # Examples
+    /// # Panics
+    /// # Errors
+    /// # Safety
     #[allow(unused)]
     #[must_use]
     pub fn on_history<CB, Fut, O, T>(history: &T, event_type: &str, is_serial: bool, callback: CB) -> impl FnOnce()
@@ -133,6 +146,14 @@ impl EventStream {
             executor::block_on(sender.close()).unwrap_throw()
         }
     }
+    /// 向浏览器【帧渲染】挂载事件处理函数
+    /// * `event_type: &str`会被映射给事件处理函数 event 实参的 type 属性值
+    /// * `is_serial: bool`表示：当事件被频繁且连续地被触发时，事件处理函数是否被允许并发地执行，或者必须串行执行
+    /// * 事件处理函数实参`event: CustomEvent`的`detail.timestamp`属性值是`js - requestAnimationFrame(timestamp => {...})`中的`timestamp`回调函数实参值。
+    /// # Examples
+    /// # Panics
+    /// # Errors
+    /// # Safety
     #[allow(unused)]
     #[must_use]
     pub fn on_request_animation_frame<CB, Fut>(event_type: &str, is_serial: bool, callback: CB) -> impl FnOnce()

@@ -1,10 +1,10 @@
 [package]
 authors = ["stuart_zhang <stuartpage@qq.com>"]
 categories = ["wasm"]
-description = "在 WASM 中，将 Cpp - RAII 风格的 DOM 事件处理函数挂载方式封装为 js 风格的 watch/unwatch 挂载方式"
+description = "二次封装`gloo crate`，将`Cpp - RAII`风格的`DOM`事件处理函数挂载方式封装为`Javascript - Angular`风格的`register / deregister`模式。"
 edition = "2021"
 keywords = ["wasm", "dom", "event", "event_listener", "on", "off"]
-name = "wasm-dom-events"
+name = "wasm-gloo-dom-events"
 publish = ["https://github.com/rust-lang/crates.io-index"]
 version = "0.1.0"
 
