@@ -7,7 +7,7 @@ keywords = ["wasm", "dom", "event", "event_listener"]
 license = "MIT"
 name = "wasm-gloo-dom-events"
 repository = "https://github.com/stuartZhang/wasm-gloo-dom-events"
-version = "0.1.1"
+version = "0.1.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

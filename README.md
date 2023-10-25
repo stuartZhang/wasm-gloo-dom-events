@@ -97,13 +97,10 @@ vm.$onDestroy = () => {
 1. `DOM`元素触发事件
 2. 浏览器【历史栈】变更事件`window.addEventListener('popstate',...)`
 3. 浏览器【帧渲染】事件`requestAnimationFrame()`
+4. `setTimeout()`
+5. `setInterval()`
 
-的处理函数【挂/卸载】操作做了`register / deregister`封装。后续还会添加对（可取消的）
-
-1. `setTimeout()`和
-2. `setInterval()`
-
-的支持。
+的处理函数【挂/卸载】操作做了`register / deregister`封装。
 
 其次，对非常活跃事件源的事件处理函数，基于【异步流】底层技术，提供两种执行方式：
 

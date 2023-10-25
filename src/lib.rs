@@ -1,6 +1,6 @@
 mod option;
 use ::futures::{channel::mpsc, executor, FutureExt, SinkExt, stream::Stream, StreamExt};
-use ::gloo::{events::{EventListener, EventListenerOptions}, history::{History, HistoryListener}, render::{self, AnimationFrame}};
+use ::gloo::{events::{EventListener, EventListenerOptions}, history::{History, HistoryListener}, render::{self, AnimationFrame}, timers::callback::{Interval, Timeout}};
 use ::serde::{Deserialize, Serialize};
 use ::std::{borrow::Cow, cell::RefCell, convert::Into, future::Future, pin::Pin, rc::Rc, task::{Context, Poll}};
 use ::wasm_bindgen::prelude::*;
@@ -9,7 +9,9 @@ pub use option::Options;
 enum Listener {
     Event(EventListener),
     History(HistoryListener),
-    Render(AnimationFrame)
+    Render(AnimationFrame),
+    Interval(Interval),
+    Timeout(Timeout)
 }
 pub enum Event {
     Event(Event2),
@@ -80,6 +82,38 @@ impl EventStream {
             sender,
             receiver,
             _listener: Listener::Render(listener),
+        }
+    }
+    fn with_interval(event_type: String, duration: u32) -> Self {
+        let (sender, receiver) = mpsc::unbounded();
+        let sender = Rc::new(RefCell::new(sender));
+        let listener = {
+            let sender = Rc::clone(&sender);
+            Interval::new(duration, move || {
+                let custom_event = CustomEvent::new(&event_type[..]).unwrap_throw();
+                sender.borrow().unbounded_send(Event::CustomEvent(custom_event)).unwrap_throw();
+            })
+        };
+        Self {
+            sender,
+            receiver,
+            _listener: Listener::Interval(listener),
+        }
+    }
+    fn with_timeout(event_type: String, duration: u32) -> Self {
+        let (sender, receiver) = mpsc::unbounded();
+        let sender = Rc::new(RefCell::new(sender));
+        let listener = {
+            let sender = Rc::clone(&sender);
+            Timeout::new(duration, move || {
+                let custom_event = CustomEvent::new(&event_type[..]).unwrap_throw();
+                sender.borrow().unbounded_send(Event::CustomEvent(custom_event)).unwrap_throw();
+            })
+        };
+        Self {
+            sender,
+            receiver,
+            _listener: Listener::Timeout(listener),
         }
     }
     /// 向`DOM`元素挂载指定事件类型的事件处理函数
@@ -173,6 +207,65 @@ impl EventStream {
         } else {
             stream.for_each_concurrent(None, callback).right_future()
         });
+        move || {
+            let mut sender = sender.borrow_mut();
+            executor::block_on(sender.close()).unwrap_throw()
+        }
+    }
+    /// 向浏览器【循环计划任务】挂载事件处理函数
+    /// * `event_type: &str`会被映射给事件处理函数 event 实参的 type 属性值
+    /// * `duration: u32` 事件的触发间隔周期
+    /// * `is_serial: bool`表示：当事件被频繁且连续地被触发时，事件处理函数是否被允许并发地执行，或者必须串行执行
+    /// # Examples
+    /// # Panics
+    /// # Errors
+    /// # Safety
+    #[allow(unused)]
+    #[must_use]
+    pub fn on_interval<CB, Fut>(event_type: &str, duration: u32, is_serial: bool, callback: CB) -> impl FnOnce()
+    where CB: Fn(CustomEvent) -> Fut + 'static,
+          Fut: Future<Output = Result<(), JsValue>> + 'static {
+        let stream = Self::with_interval(event_type.to_string(), duration);
+        let sender = Rc::clone(&stream.sender);
+        let callback = move |event| {
+            if let Event::CustomEvent(event) =  event {
+                callback(event).map(|result| result.unwrap_throw())
+            } else {
+                wasm_bindgen::throw_str("循环计划任务事件仅支持 CustomEvent 事件类型")
+            }
+        };
+        wasm_bindgen_futures::spawn_local(if is_serial {
+            stream.for_each(callback).left_future()
+        } else {
+            stream.for_each_concurrent(None, callback).right_future()
+        });
+        move || {
+            let mut sender = sender.borrow_mut();
+            executor::block_on(sender.close()).unwrap_throw()
+        }
+    }
+    /// 向浏览器【单次计划任务】挂载事件处理函数
+    /// * `event_type: &str`会被映射给事件处理函数 event 实参的 type 属性值
+    /// * `duration: u32` 事件的触发的延迟时间
+    /// # Examples
+    /// # Panics
+    /// # Errors
+    /// # Safety
+    #[allow(unused)]
+    #[must_use]
+    pub fn on_timeout<CB, Fut>(event_type: &str, duration: u32, callback: CB) -> impl FnOnce()
+    where CB: Fn(CustomEvent) -> Fut + 'static,
+          Fut: Future<Output = Result<(), JsValue>> + 'static {
+        let stream = Self::with_timeout(event_type.to_string(), duration);
+        let sender = Rc::clone(&stream.sender);
+        let callback = move |event| {
+            if let Event::CustomEvent(event) =  event {
+                callback(event).map(|result| result.unwrap_throw())
+            } else {
+                wasm_bindgen::throw_str("单次计划任务事件仅支持 CustomEvent 事件类型")
+            }
+        };
+        wasm_bindgen_futures::spawn_local(stream.for_each(callback));
         move || {
             let mut sender = sender.borrow_mut();
             executor::block_on(sender.close()).unwrap_throw()
