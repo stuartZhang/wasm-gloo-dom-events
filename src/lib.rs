@@ -122,7 +122,6 @@ impl EventStream {
     /// # Panics
     /// # Errors
     /// # Safety
-    #[allow(unused)]
     #[must_use]
     pub fn on<CB, Fut, O>(target: &EventTarget, event_type: impl Into<Cow<'static, str>>, options: O, callback: CB) -> impl FnOnce()
     where O: Into<Option<Options>>,
@@ -155,7 +154,6 @@ impl EventStream {
     /// # Panics
     /// # Errors
     /// # Safety
-    #[allow(unused)]
     #[must_use]
     pub fn on_history<CB, Fut, O, T>(history: &T, event_type: &str, is_serial: bool, callback: CB) -> impl FnOnce()
     where T: History,
@@ -188,7 +186,6 @@ impl EventStream {
     /// # Panics
     /// # Errors
     /// # Safety
-    #[allow(unused)]
     #[must_use]
     pub fn on_request_animation_frame<CB, Fut>(event_type: &str, is_serial: bool, callback: CB) -> impl FnOnce()
     where CB: Fn(CustomEvent) -> Fut + 'static,
@@ -220,7 +217,6 @@ impl EventStream {
     /// # Panics
     /// # Errors
     /// # Safety
-    #[allow(unused)]
     #[must_use]
     pub fn on_interval<CB, Fut>(event_type: &str, duration: u32, is_serial: bool, callback: CB) -> impl FnOnce()
     where CB: Fn(CustomEvent) -> Fut + 'static,
@@ -251,7 +247,6 @@ impl EventStream {
     /// # Panics
     /// # Errors
     /// # Safety
-    #[allow(unused)]
     #[must_use]
     pub fn on_timeout<CB, Fut>(event_type: &str, duration: u32, callback: CB) -> impl FnOnce()
     where CB: Fn(CustomEvent) -> Fut + 'static,
