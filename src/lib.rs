@@ -37,7 +37,5 @@ pub use browser_dom_element::Options;
 mod browser_history;
 #[path ="./browser-animation-frame.rs"]
 mod browser_animation_frame;
-#[path ="./browser-interval.rs"]
-mod browser_interval;
-#[path ="./browser-timeout.rs"]
-mod browser_timeout;
+mod interval;
+mod timeout;
