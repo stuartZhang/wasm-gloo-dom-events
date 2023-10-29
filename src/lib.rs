@@ -12,7 +12,12 @@ enum Listener {
 }
 pub enum Event {
     Event(Event2),
-    CustomEvent(CustomEvent)
+    CustomEvent(CustomEvent),
+    None(String)
+}
+pub enum Vm {
+    Browser(CustomEvent),
+    Nodejs(String)
 }
 pub struct EventStream {
     sender: Rc<RefCell<mpsc::UnboundedSender<Event>>>,
@@ -30,11 +35,9 @@ mod browser_dom_element;
 pub use browser_dom_element::Options;
 #[path ="./browser-history.rs"]
 mod browser_history;
-
 #[path ="./browser-animation-frame.rs"]
 mod browser_animation_frame;
 #[path ="./browser-interval.rs"]
 mod browser_interval;
 #[path ="./browser-timeout.rs"]
 mod browser_timeout;
-

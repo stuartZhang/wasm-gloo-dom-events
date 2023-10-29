@@ -3,7 +3,7 @@ use ::gloo::timers::callback::Interval;
 use ::std::{cell::RefCell, future::Future, rc::Rc};
 use ::wasm_bindgen::prelude::*;
 use ::web_sys::CustomEvent;
-use super::{Event, EventStream, Listener};
+use super::{Event, EventStream, Listener, Vm};
 
 impl EventStream {
     fn with_interval(event_type: String, duration: u32) -> Self {
@@ -12,8 +12,12 @@ impl EventStream {
         let listener = {
             let sender = Rc::clone(&sender);
             Interval::new(duration, move || {
-                let custom_event = CustomEvent::new(&event_type[..]).unwrap_throw();
-                sender.borrow().unbounded_send(Event::CustomEvent(custom_event)).unwrap_throw();
+                let event_type = event_type.clone();
+                let custom_event = CustomEvent::new(&event_type[..]).map_or_else(
+                    |_err| Event::None(event_type),
+                    Event::CustomEvent
+                );
+                sender.borrow().unbounded_send(custom_event).unwrap_throw();
             })
         };
         Self {
@@ -32,16 +36,22 @@ impl EventStream {
     /// # Safety
     #[must_use]
     pub fn on_interval<CB, Fut>(event_type: &str, duration: u32, is_serial: bool, callback: CB) -> impl FnOnce()
-    where CB: Fn(CustomEvent) -> Fut + 'static,
+    where CB: Fn(Vm) -> Fut + 'static,
           Fut: Future<Output = Result<(), JsValue>> + 'static {
         let stream = Self::with_interval(event_type.to_string(), duration);
         let sender = Rc::clone(&stream.sender);
         let callback = move |event| {
-            if let Event::CustomEvent(event) =  event {
-                callback(event).map(|result| result.unwrap_throw())
-            } else {
-                wasm_bindgen::throw_str("循环计划任务事件仅支持 CustomEvent 事件类型")
-            }
+            match event {
+                Event::CustomEvent(event) => {
+                    callback(Vm::Browser(event))
+                },
+                Event::None(event_type) => {
+                    callback(Vm::Nodejs(event_type))
+                },
+                _ => {
+                    wasm_bindgen::throw_str("循环计划任务事件仅支持 CustomEvent 事件类型")
+                }
+            }.map(|result| result.unwrap_throw())
         };
         wasm_bindgen_futures::spawn_local(if is_serial {
             stream.for_each(callback).left_future()
