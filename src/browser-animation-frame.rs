@@ -3,30 +3,17 @@ use ::gloo::render;
 use ::serde::{Deserialize, Serialize};
 use ::std::{cell::RefCell, future::Future, rc::Rc};
 use ::wasm_bindgen::prelude::*;
-use ::web_sys::CustomEvent;
+use ::web_sys::{CustomEvent, CustomEventInit};
 use super::{Event, EventStream, Listener};
 
 impl EventStream {
-    fn with_request_animation_frame(event_type: String) -> Self {
+    fn with_request_animation_frame() -> Self {
         let (sender, receiver) = mpsc::unbounded();
         let sender = Rc::new(RefCell::new(sender));
         let listener = {
             let sender = Rc::clone(&sender);
             render::request_animation_frame(move |timestamp| {
-                #[derive(Deserialize, Serialize)]
-                struct Detail {
-                    timestamp: f64
-                }
-                let detail = Detail {timestamp};
-                let detail = serde_wasm_bindgen::to_value(&detail).unwrap_throw();
-                let custom_event = CustomEvent::new(&event_type[..]).unwrap_throw();
-                custom_event.init_custom_event_with_can_bubble_and_cancelable_and_detail(
-                    &event_type[..],
-                    false,
-                    true,
-                    &detail
-                );
-                sender.borrow().unbounded_send(Event::CustomEvent(custom_event)).unwrap_throw();
+                sender.borrow().unbounded_send(Event::F64(timestamp)).unwrap_throw();
             })
         };
         Self {
@@ -44,14 +31,23 @@ impl EventStream {
     /// # Errors
     /// # Safety
     #[must_use]
-    pub fn on_request_animation_frame<CB, Fut>(event_type: &str, is_serial: bool, callback: CB) -> impl FnOnce()
-    where CB: Fn(CustomEvent) -> Fut + 'static,
+    pub fn on_request_animation_frame<CB, Fut>(event_type: String, is_serial: bool, mut callback: CB) -> impl FnOnce()
+    where CB: FnMut(CustomEvent) -> Fut + 'static,
           Fut: Future<Output = Result<(), JsValue>> + 'static {
-        let stream = Self::with_request_animation_frame(event_type.to_string());
+        let stream = Self::with_request_animation_frame();
         let sender = Rc::clone(&stream.sender);
         let callback = move |event| {
-            if let Event::CustomEvent(event) =  event {
-                callback(event).map(|result| result.unwrap_throw())
+            if let Event::F64(timestamp) =  event {
+                #[derive(Deserialize, Serialize)]
+                struct Detail {
+                    timestamp: f64
+                }
+                let detail = Detail {timestamp};
+                let detail = serde_wasm_bindgen::to_value(&detail).unwrap_throw();
+                callback(CustomEvent::new_with_event_init_dict(
+                    &event_type[..],
+                    CustomEventInit::new().bubbles(false).cancelable(true).detail(&detail)
+                ).unwrap_throw()).map(|result| result.unwrap_throw())
             } else {
                 wasm_bindgen::throw_str("帧渲染事件仅支持 CustomEvent 事件类型")
             }

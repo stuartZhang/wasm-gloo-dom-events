@@ -7,9 +7,12 @@ keywords = ["wasm", "dom", "event", "event_listener"]
 license = "MIT"
 name = "wasm-gloo-dom-events"
 repository = "https://github.com/stuartZhang/wasm-gloo-dom-events"
-version = "0.1.3"
+version = "0.2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+nodejs = []
 
 [dependencies]
 futures = "0.3.28"
@@ -20,5 +23,21 @@ wasm-bindgen = {version = "0.2.87", features = ["serde-serialize"]}
 wasm-bindgen-futures = "0.4.37"
 web-sys = {version = "0.3.64", features = [
     "CustomEvent",
+    "CustomEventInit",
     "Event",
+]}
+
+[dev-dependencies]
+deferred-future = {version = "0.1.4", features = ["local"]}
+gloo = { version = "0.10.0", features = ["futures", "history", "utils"] }
+futures = "0.3.28"
+wasm-bindgen = "0.2.87"
+wasm-bindgen-futures = "0.4.37"
+wasm-bindgen-test = "0.3.37"
+web-sys = {version = "0.3.64", features = [
+    "Document",
+    "History",
+    "HtmlBodyElement",
+    "HtmlButtonElement",
+    "PointerEvent"
 ]}

@@ -1,7 +1,7 @@
 use ::futures::{channel::mpsc, stream::Stream};
-use ::gloo::{events::EventListener, history::HistoryListener, render::AnimationFrame, timers::callback::{Interval, Timeout}};
+use ::gloo::{events::EventListener, history::{HistoryListener, Location}, render::AnimationFrame, timers::callback::{Interval, Timeout}};
 use ::std::{cell::RefCell, pin::Pin, rc::Rc, task::{Context, Poll}};
-use ::web_sys::{Event as Event2, CustomEvent};
+use ::web_sys::{Event as BrowserEvent, CustomEvent};
 
 enum Listener {
     Event(EventListener),
@@ -11,9 +11,11 @@ enum Listener {
     Timeout(Timeout)
 }
 pub enum Event {
-    Event(Event2),
-    CustomEvent(CustomEvent),
-    None(String)
+    Event(BrowserEvent),
+    Location(Location),
+    String(String),
+    F64(f64),
+    None
 }
 pub enum Vm {
     Browser(CustomEvent),

@@ -6,14 +6,14 @@ use ::web_sys::CustomEvent;
 use super::{Event, EventStream, Listener};
 
 impl EventStream {
-    fn with_history<T>(history: &T, event_type: String) -> Self
-    where T: History {
+    fn with_history<T>(history: Rc<T>) -> Self
+    where T: History + 'static {
         let (sender, receiver) = mpsc::unbounded();
         let sender = Rc::new(RefCell::new(sender));
         let listener = {
             let sender = Rc::clone(&sender);
-            history.listen(move || {
-                sender.borrow().unbounded_send(Event::CustomEvent(CustomEvent::new(&event_type[..]).unwrap_throw())).unwrap_throw();
+            Rc::clone(&history).listen(move || {
+                sender.borrow().unbounded_send(Event::Location(history.location())).unwrap_throw();
             })
         };
         Self {
@@ -30,15 +30,18 @@ impl EventStream {
     /// # Errors
     /// # Safety
     #[must_use]
-    pub fn on_history<CB, Fut, O, T>(history: &T, event_type: &str, is_serial: bool, callback: CB) -> impl FnOnce()
-    where T: History,
-          CB: Fn(CustomEvent) -> Fut + 'static,
+    pub fn on_history<S, T, CB, Fut>(history: Rc<T>, event_type: String, is_serial: bool, callback: CB) -> impl FnOnce()
+    where S: 'static,
+          T: History + 'static,
+          CB: Fn(CustomEvent, Option<Rc<S>>) -> Fut + 'static,
           Fut: Future<Output = Result<(), JsValue>> + 'static {
-        let stream = Self::with_history(history, event_type.to_string());
+        let stream = Self::with_history(history);
         let sender = Rc::clone(&stream.sender);
         let callback = move |event| {
-            if let Event::CustomEvent(event) =  event {
-                callback(event).map(|result| result.unwrap_throw())
+            if let Event::Location(location) =  event {
+                let custom_event = CustomEvent::new(&event_type[..]).unwrap_throw();
+                let state = location.state::<S>();
+                callback(custom_event, state).map(|result| result.unwrap_throw())
             } else {
                 wasm_bindgen::throw_str("历史栈变更事件仅支持 CustomEvent 事件类型")
             }

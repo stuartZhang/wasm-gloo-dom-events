@@ -33,9 +33,9 @@ impl EventStream {
     /// # Errors
     /// # Safety
     #[must_use]
-    pub fn on<CB, Fut, O>(target: &EventTarget, event_type: impl Into<Cow<'static, str>>, options: O, callback: CB) -> impl FnOnce()
+    pub fn on<CB, Fut, O>(target: &EventTarget, event_type: impl Into<Cow<'static, str>>, options: O, mut callback: CB) -> impl FnOnce()
     where O: Into<Option<Options>>,
-          CB: Fn(Event2) -> Fut + 'static,
+          CB: FnMut(Event2) -> Fut + 'static,
           Fut: Future<Output = Result<(), JsValue>> + 'static {
         let options = Into::<Option<Options>>::into(options).unwrap_or_default();
         let stream = Self::new(target, event_type, options.event_listener_options());

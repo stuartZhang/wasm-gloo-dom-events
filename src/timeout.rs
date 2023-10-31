@@ -6,17 +6,13 @@ use ::web_sys::CustomEvent;
 use super::{Event, EventStream, Listener, Vm};
 
 impl EventStream {
-    fn with_timeout(event_type: String, duration: u32) -> Self {
+    fn with_timeout(duration: u32) -> Self {
         let (sender, receiver) = mpsc::unbounded();
         let sender = Rc::new(RefCell::new(sender));
         let listener = {
             let sender = Rc::clone(&sender);
             Timeout::new(duration, move || {
-                let custom_event = CustomEvent::new(&event_type[..]).map_or_else(
-                    |_err| Event::None(event_type),
-                    Event::CustomEvent
-                );
-                sender.borrow().unbounded_send(custom_event).unwrap_throw();
+                sender.borrow().unbounded_send(Event::None).unwrap_throw();
             })
         };
         Self {
@@ -33,24 +29,16 @@ impl EventStream {
     /// # Errors
     /// # Safety
     #[must_use]
-    pub fn on_timeout<CB, Fut>(event_type: &str, duration: u32, callback: CB) -> impl FnOnce()
-    where CB: Fn(Vm) -> Fut + 'static,
+    pub fn on_timeout<CB, Fut>(event_type: String, duration: u32, mut callback: CB) -> impl FnOnce()
+    where CB: FnMut(Vm) -> Fut + 'static,
           Fut: Future<Output = Result<(), JsValue>> + 'static {
-        let stream = Self::with_timeout(event_type.to_string(), duration);
+        let stream = Self::with_timeout(duration);
         let sender = Rc::clone(&stream.sender);
-        let callback = move |event| {
-            match event {
-                Event::CustomEvent(event) => {
-                    callback(Vm::Browser(event))
-                },
-                Event::None(event_type) => {
-                    callback(Vm::Nodejs(event_type))
-                },
-                _ => {
-                    wasm_bindgen::throw_str("单次计划任务事件仅支持 CustomEvent 事件类型")
-                }
-            }.map(|result| result.unwrap_throw())
-        };
+        let callback = move |_| callback(CustomEvent::new(&event_type).map_or_else(|_| {
+            Vm::Nodejs(event_type.clone())
+        }, |event| {
+            Vm::Browser(event)
+        })).map(|result| result.unwrap_throw());
         wasm_bindgen_futures::spawn_local(stream.for_each(callback));
         move || {
             let mut sender = sender.borrow_mut();

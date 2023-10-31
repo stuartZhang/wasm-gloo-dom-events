@@ -115,56 +115,224 @@ vm.$onDestroy = () => {
 cargo add wasm-gloo-dom-events
 ```
 
-## 使用例程
+## 调用套路详解
 
-### `DOM`元素的点击事件
+一共分成五个场景与五类套路
+
+### 浏览器`DOM`元素响应事件
 
 ```rust
-//
-// 获取网页上下文
-//
-let window = web_sys::window().expect_throw("没有window对象");
-let document = window.document().expect_throw("未运行于浏览器环境内，没有 document 全局对象");
-let body = document.body().expect_throw("未运行于浏览器环境内，没有 body DOM 结点")?;
-//
-// 创建一个按钮`DOM`元素
-//
-let button = document.create_element("button").unwrap_throw().dyn_into::<HtmlButtonElement>().unwrap_throw();
-button.set_text_content(Some("警告 和 刷新"));
-body.append_child(&button)?;
+use ::deferred_future::LocalDeferredFuture;
+use ::futures::future;
+use ::gloo::{timers::future::TimeoutFuture, utils};
+use ::wasm_bindgen::{JsCast, UnwrapThrowExt};
+use ::wasm_bindgen_test::*;
 use ::wasm_gloo_dom_events::{EventStream, Options};
-//
-// 给按钮`DOM`元素挂载点击事件。
-//
-let off = EventStream::on(&button, "click", Options::enable_prevent_default(true), |event| async move {
-    // 异步块的事件处理函数
-    let event = event.dyn_into::<PointerEvent>()?;
-    event.prevent_default();
-    event.stop_propagation();
-    info!("按钮点击事件", &event);
-    Ok(())
-});
-// ...
-off(); // 卸载事件处理函数
+use ::web_sys::{Document, HtmlBodyElement, HtmlButtonElement, PointerEvent};
+wasm_bindgen_test_configure!(run_in_browser);
+#[wasm_bindgen_test]
+async fn dom_event() {
+    //
+    // 创建一个按钮`DOM`元素，和将其添加至文档`DOM`流中。
+    //
+    let document = utils::document();
+    let body = utils::body().dyn_into::<HtmlBodyElement>().unwrap_throw();
+    let button = create_element::<HtmlButtonElement>(&document, "button");
+    body.append_child(&button).unwrap_throw();
+    let deferred_future = LocalDeferredFuture::default();
+    let defer = deferred_future.defer();
+    //
+    // 给按钮`DOM`元素挂载鼠标点击事件处理函数。
+    // 1. 回调函数唯一形参是`DOM`事件自身的事件对象。
+    //
+    let off = EventStream::on(&button, "click", Options::enable_prevent_default(true), move |_event| {
+        // 异步的事件处理函数
+        defer.borrow_mut().complete("12".to_string());
+        future::ready(Ok(()))
+    });
+    //
+    // 模拟稍后点击按钮`DOM`元素。
+    //
+    wasm_bindgen_futures::spawn_local(async move {
+        TimeoutFuture::new(500).await;
+        let event = PointerEvent::new("click").unwrap_throw();
+        button.dispatch_event(&event).unwrap_throw();
+    });
+    let result = deferred_future.await;
+    assert_eq!(result, "12");
+    //
+    // 卸载事件处理函数
+    //
+    off();
+}
+fn create_element<T: JsCast>(document: &Document, tag_name: &str) -> T {
+    document.create_element(tag_name).unwrap_throw().dyn_into::<T>().unwrap_throw()
+}
 ```
+
+从命令行，执行命令`wasm-pack test --chrome --headless --test=case4dom_event`可直接运行此例程。
+
+### 浏览器【历史栈】变更事件
+
+```rust
+use ::deferred_future::LocalDeferredFuture;
+use ::futures::future;
+use gloo::history::History;
+use ::gloo::{history::BrowserHistory, timers::future::TimeoutFuture};
+use ::std::rc::Rc;
+use ::wasm_bindgen_test::*;
+use ::wasm_gloo_dom_events::EventStream;
+wasm_bindgen_test_configure!(run_in_browser);
+#[wasm_bindgen_test]
+async fn history() {
+    //
+    // 从主窗体拾取出`history`实例
+    //
+    let browser_history = Rc::new(BrowserHistory::new());
+    let deferred_future: LocalDeferredFuture<String> = LocalDeferredFuture::default();
+    let defer = deferred_future.defer();
+    let off = {
+        let browser_history = Rc::clone(&browser_history);
+        //
+        // 给`history`挂载历史栈更新事件处理函数。
+        // 1. 回调函数第一个形参是`CustomEvent`。其`type`属性值呼应于`EventStream::on_history(..)`的第二个实参值。
+        // 2. 回调函数第二个形参是`history`的最新状态数据。
+        //
+        EventStream::on_history(Rc::clone(&browser_history), "测试".to_string(), true, move |_event, state: Option<Rc<&str>>| {
+            // 异步的事件处理函数
+            defer.borrow_mut().complete(state.unwrap().to_string());
+            future::ready(Ok(()))
+        })
+    };
+    {
+        let browser_history = Rc::clone(&browser_history);
+        //
+        // 模拟稍后`TAB`签路由变更 — 浏览器地址栏内容发生变化。
+        //
+        wasm_bindgen_futures::spawn_local(async move {
+            TimeoutFuture::new(500).await;
+            // 修改地址栏`url`，和压栈新历史状态数据。在本例中，
+            // 1. 修改浏览器地址栏为`/route1`
+            // 2. 填入历史状态数据"12"字符串
+            browser_history.push_with_state("route1", "12");
+        });
+    }
+    let result = deferred_future.await;
+    assert_eq!(result, "12");
+    //
+    // 卸载事件处理函数
+    //
+    off();
+}
+```
+
+从命令行，执行命令`wasm-pack test --chrome --headless --test=case4history`可直接运行此例程。
 
 ### 浏览器【帧渲染】事件
 
 ```rust
+use ::deferred_future::LocalDeferredFuture;
 use ::futures::future;
+use ::wasm_bindgen_test::*;
 use ::wasm_gloo_dom_events::EventStream;
-//
-// 给浏览器【帧渲染】挂载事件。
-//
-// * 第一个 &str 参数会被映射给事件处理函数 event 实参的 type 属性值
-// * event 实参的 detail.timestamp 属性值是`js - requestAnimationFrame(timestamp => {...})`中的`timestamp`回调函数实参值。
-let off = EventStream::on_request_animation_frame("request_animation_frame", true, |event| {
-    // 完全同步的事件处理函数。
-    event.prevent_default();
-    event.stop_propagation();
-    info!("帧渲染事件", &event);
-    future::ready(Ok(()))
-});
-// ...
-off(); // 取消帧渲染监听。相当于 cancelAnimationFrame()
+wasm_bindgen_test_configure!(run_in_browser);
+#[wasm_bindgen_test]
+async fn request_animation_frame() {
+    let deferred_future = LocalDeferredFuture::default();
+    let defer = deferred_future.defer();
+    //
+    // 给浏览器【帧渲染】挂载事件。回调函数唯一形参是`CustomEvent`。
+    // 1. 其`type`属性值呼应于`EventStream::on_request_animation_frame(..)`的第一个实参值。
+    // 2. 其`detail.timestamp`属性值是`js - requestAnimationFrame(timestamp => {...})`中的`timestamp`回调函数实参值。
+    //
+    let off = EventStream::on_request_animation_frame("requestAnimationFrame".to_string(), true, move |_event| {
+        // 异步的事件处理函数
+        defer.borrow_mut().complete("12".to_string());
+        future::ready(Ok(()))
+    });
+    let result = deferred_future.await;
+    assert_eq!(result, "12");
+    //
+    // 卸载事件处理函数
+    //
+    off();
+}
 ```
+
+从命令行，执行命令`wasm-pack test --chrome --headless --test=case4request_animation_frame`可直接运行此例程。
+
+### 单次计划任务
+
+```rust
+use ::deferred_future::LocalDeferredFuture;
+use ::futures::future;
+use ::wasm_bindgen_test::*;
+use ::wasm_gloo_dom_events::EventStream;
+#[cfg(not(feature = "nodejs"))]
+wasm_bindgen_test_configure!(run_in_browser);
+#[wasm_bindgen_test]
+async fn timeout() {
+    let deferred_future = LocalDeferredFuture::default();
+    let defer = deferred_future.defer();
+    //
+    // 给`window.setTimeout()`挂载回调函数。回调函数唯一形参是`CustomEvent`。
+    // 1. 其`type`属性值呼应于`EventStream::on_timeout(..)`的第一个实参值。
+    //
+    let off = EventStream::on_timeout("timeout".to_string(), 1000, move |_event| {
+        // 异步的事件处理函数
+        defer.borrow_mut().complete("12".to_string());
+        future::ready(Ok(()))
+    });
+    let result = deferred_future.await;
+    assert_eq!(result, "12");
+    //
+    // 卸载事件处理函数
+    //
+    off();
+}
+```
+
+从命令行，执行命令可直接运行此例程
+
+* 浏览器：`wasm-pack test --chrome --headless --test=case4timeout`
+* `nodejs`：`wasm-pack test --node --features=nodejs --test=case4timeout`
+
+### 周期多次计划任务
+
+```rust
+use ::deferred_future::LocalDeferredFuture;
+use ::futures::future;
+use ::wasm_bindgen_test::*;
+use ::wasm_gloo_dom_events::EventStream;
+#[cfg(not(feature = "nodejs"))]
+wasm_bindgen_test_configure!(run_in_browser);
+#[wasm_bindgen_test]
+async fn timeout() {
+    let deferred_future = LocalDeferredFuture::default();
+    let defer = deferred_future.defer();
+    let mut count = 0_u8;
+    //
+    // 给`window.setInterval()`挂载回调函数。回调函数唯一形参是`CustomEvent`。
+    // 1. 其`type`属性值呼应于`EventStream::on_interval(..)`的第一个实参值。
+    //
+    let off = EventStream::on_interval("interval".to_string(), 1000, true, move |_event| {
+        // 异步的事件处理函数
+        count += 1;
+        if count > 5 {
+            defer.borrow_mut().complete("12".to_string());
+        }
+        future::ready(Ok(()))
+    });
+    let result = deferred_future.await;
+    assert_eq!(result, "12");
+    //
+    // 卸载事件处理函数
+    //
+    off();
+}
+```
+
+从命令行，执行命令可直接运行此例程
+
+* 浏览器：`wasm-pack test --chrome --headless --test=case4interval`
+* `nodejs`：`wasm-pack test --node --features=nodejs --test=case4interval`
